@@ -4,6 +4,8 @@ namespace Havun\Observability\Http;
 
 use Closure;
 use Havun\Observability\HavunCore;
+use Havun\Observability\Reporter;
+use Havun\Observability\SlowQueries;
 use Havun\Observability\SafePath;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
@@ -20,12 +22,18 @@ class RequestMetrics
     public function handle(Request $request, Closure $next): Response
     {
         $this->start = microtime(true);
+        HavunCore::setInRequest(true);
 
         return $next($request);
     }
 
+    /** After the response: this request's errors, slow queries and its metric row. */
     public function terminate(Request $request, Response $response): void
     {
+        HavunCore::setInRequest(false);
+        app(Reporter::class)->flushPending();
+        app(SlowQueries::class)->flush();
+
         if (! $this->shouldRecord($request)) {
             return;
         }

@@ -2,6 +2,7 @@
 
 namespace Havun\Observability\Tests;
 
+use Havun\Observability\HavunCore;
 use Havun\Observability\ObservabilityServiceProvider;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\DB;
@@ -30,7 +31,7 @@ abstract class TestCase extends Orchestra
     protected function setUp(): void
     {
         parent::setUp();
-        @unlink(storage_path('framework/observability-breaker'));
+        HavunCore::reset();
         @unlink(storage_path('app/error-spool.jsonl'));
 
         $schema = Schema::connection('havuncore');
@@ -89,6 +90,6 @@ abstract class TestCase extends Orchestra
     {
         DB::purge('havuncore');
         config(['database.connections.havuncore.database' => $this->havuncoreDb]);
-        @unlink(storage_path('framework/observability-breaker'));
+        HavunCore::reset();
     }
 }

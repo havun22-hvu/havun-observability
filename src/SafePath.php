@@ -3,13 +3,18 @@
 namespace Havun\Observability;
 
 use Illuminate\Http\Request;
+use Throwable;
 
 /**
  * The request path without secrets: query string dropped, the value of a secret route
- * parameter (config `secret_route_parameters`) replaced by `{name}`. Slugs stay.
+ * parameter (config `secret_route_parameters`) replaced by `{name}`. A request no route matched
+ * has no parameters to go by: there every token-like segment becomes `{token}`. Slugs stay.
  */
 final class SafePath
 {
+    /** A segment of 16+ URL-safe characters with a digit: a token, not a slug. */
+    private const TOKEN_LIKE = '/^(?=.*\d)[A-Za-z0-9_\-.~%]{16,}$/';
+
     /** Path without leading slash, e.g. "inloglink/{token}". */
     public static function path(?Request $request): string
     {
@@ -17,17 +22,26 @@ final class SafePath
             return '';
         }
 
-        $secrets = self::secretValues($request);
-        $segments = explode('/', $request->path());
+        try {
+            $path = rawurldecode($request->path());
+            $secrets = self::secretValues($request);
 
-        foreach ($segments as $i => $segment) {
-            $value = rawurldecode($segment);
-            if (isset($secrets[$value])) {
-                $segments[$i] = '{'.$secrets[$value].'}';
+            if ($secrets === null) {
+                return implode('/', array_map(
+                    fn (string $s): string => preg_match(self::TOKEN_LIKE, $s) ? '{token}' : $s,
+                    explode('/', $path)
+                ));
             }
-        }
 
-        return implode('/', $segments);
+            // Whole-value replacement also covers a secret that contains a slash.
+            foreach ($secrets as $value => $name) {
+                $path = str_replace($value, '{'.$name.'}', $path);
+            }
+
+            return $path;
+        } catch (Throwable) {
+            return '';
+        }
     }
 
     /** Full URL without query string and fragment, secrets replaced. */
@@ -42,19 +56,19 @@ final class SafePath
         return rtrim($request->root(), '/').($path === '/' || $path === '' ? '' : '/'.$path);
     }
 
-    /** @return array<string, string> raw value => parameter name */
-    private static function secretValues(Request $request): array
+    /** @return array<string, string>|null raw value => parameter name; null when no route matched */
+    private static function secretValues(Request $request): ?array
     {
         $route = $request->route();
         if (! is_object($route)) {
-            return [];
+            return null;
         }
 
         $names = (array) config('observability.secret_route_parameters', []);
         $secrets = [];
-        foreach ($route->originalParameters() as $name => $value) {
+        foreach ((array) $route->originalParameters() as $name => $value) {
             if (in_array($name, $names, true) && is_string($value) && $value !== '') {
-                $secrets[$value] = $name;
+                $secrets[rawurldecode($value)] = $name;
             }
         }
 

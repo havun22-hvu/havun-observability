@@ -27,12 +27,24 @@ class Reporter
 
     private ?string $lastReference = null;
 
+    /** @var list<array<string, mixed>> rows of this request, written after the response */
+    private array $pending = [];
+
     public function __construct()
     {
         $this->reported = new WeakMap;
     }
 
     public function report(Throwable $e): void
+    {
+        try {
+            $this->reportException($e);
+        } catch (Throwable) {
+            // Reporting must never become an error of the site.
+        }
+    }
+
+    private function reportException(Throwable $e): void
     {
         if (! $this->enabled() || isset($this->reported[$e])) {
             return;
@@ -50,7 +62,7 @@ class Reporter
             'message' => $this->messageOf($e),
             'file' => $e->getFile(),
             'line' => $e->getLine(),
-            'trace' => $this->scrub(mb_substr($e->getTraceAsString(), 0, (int) config('observability.trace_max_length', 5000))),
+            'trace' => $this->scrub(mb_substr($this->traceOf($e), 0, (int) config('observability.trace_max_length', 5000))),
             'severity' => $this->severityOf($e),
         ]);
     }
@@ -66,6 +78,14 @@ class Reporter
             return;
         }
 
+        try {
+            $this->reportLog($event);
+        } catch (Throwable) {
+        }
+    }
+
+    private function reportLog(MessageLogged $event): void
+    {
         if (($event->context['exception'] ?? null) instanceof Throwable) {
             $this->report($event->context['exception']);
 
@@ -76,7 +96,7 @@ class Reporter
 
         $this->record([
             'exception_class' => "Log::{$event->level}",
-            'message' => $this->scrub(mb_substr($event->message, 0, 65535)),
+            'message' => mb_substr((string) $event->message, 0, 65535),
             'file' => $file,
             'line' => $line,
             'trace' => null,
@@ -96,6 +116,25 @@ class Reporter
             return;
         }
 
+        try {
+            $this->recordRow($row);
+        } catch (Throwable) {
+        }
+    }
+
+    /** Writes the rows of this request; RequestMetrics::terminate calls it after the response. */
+    public function flushPending(): void
+    {
+        $rows = $this->pending;
+        $this->pending = [];
+        if ($rows !== [] && ! HavunCore::insert('error_logs', $rows)) {
+            array_walk($rows, fn (array $row) => $this->spool($row));
+        }
+    }
+
+    /** @param array<string, mixed> $row */
+    private function recordRow(array $row): void
+    {
         $request = app()->bound('request') ? request() : null;
         $row['message'] = $this->scrub((string) ($row['message'] ?? ''));
         $row += [
@@ -115,6 +154,13 @@ class Reporter
 
         $this->lastReference = self::reference($row['fingerprint']);
 
+        // A visitor never waits: during a request the row goes out after the response.
+        if (HavunCore::inRequest()) {
+            $this->pending[] = $row;
+
+            return;
+        }
+
         if (! HavunCore::insert('error_logs', [$row])) {
             $this->spool($row);
         }
@@ -132,12 +178,30 @@ class Reporter
         return $this->lastReference;
     }
 
-    /** Masks personal data in free text: e-mail addresses and URL query strings. */
+    /** Masks personal data in free text: e-mail addresses, IP addresses and URL query strings. */
     public function scrub(string $text): string
     {
-        $text = (string) preg_replace('/[\w.+-]+@[\w-]+(?:\.[\w-]+)+/u', '[e-mail]', $text);
+        $text = (string) preg_replace('/[\w.+-]+(?:@|%40)[\w-]+(?:\.[\w-]+)+/u', '[e-mail]', $text);
+        $text = (string) preg_replace('/\b(?:\d{1,3}\.){3}\d{1,3}\b/', '[ip]', $text);
+        // Full IPv6 only: shorter forms collide with times (08:27:01) and Class::method.
+        $text = (string) preg_replace('/\b(?:[0-9a-f]{1,4}:){4,7}[0-9a-f]{1,4}\b/i', '[ip]', $text);
+        // Relative URLs too: "/login?token=x" keeps "/login".
+        $text = (string) preg_replace('#((?:https?://|/)[^\s?\#]*)[?\#][^\s)]+#', '$1', $text);
 
-        return (string) preg_replace('#(https?://[^\s?\#]+)[?\#][^\s)]*#', '$1', $text);
+        return $text;
+    }
+
+    /** The trace without argument values, whatever `zend.exception_ignore_args` says. */
+    private function traceOf(Throwable $e): string
+    {
+        $lines = [];
+        foreach ($e->getTrace() as $i => $frame) {
+            $lines[] = sprintf('#%d %s(%s): %s%s%s()', $i, $frame['file'] ?? '[internal]', $frame['line'] ?? '?',
+                $frame['class'] ?? '', $frame['type'] ?? '', $frame['function']);
+        }
+
+        return implode("
+", $lines);
     }
 
     /**
@@ -152,8 +216,10 @@ class Reporter
             return ['sent' => 0, 'left' => is_file($path) ? count(file($path, FILE_SKIP_EMPTY_LINES | FILE_IGNORE_NEW_LINES) ?: []) : 0];
         }
 
-        $handle = fopen($path, 'c+');
-        flock($handle, LOCK_EX);
+        $handle = @fopen($path, 'c+');
+        if ($handle === false || ! flock($handle, LOCK_EX | LOCK_NB)) {
+            return ['sent' => 0, 'left' => 0]; // another flush runs, or the file is unreadable
+        }
         $lines = array_values(array_filter(explode("\n", (string) stream_get_contents($handle))));
 
         $sent = 0;

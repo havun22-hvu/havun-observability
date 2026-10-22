@@ -21,16 +21,11 @@ use Throwable;
  */
 class ObservabilityServiceProvider extends ServiceProvider
 {
-    /** HavunCore's own tables: a slow write there must not report itself. */
-    private const OWN_TABLES = ['request_metrics', 'error_logs', 'slow_queries', 'metrics_aggregated'];
-
-    /** @var list<array<string, mixed>> slow queries of this request, written after the response */
-    private array $slowQueries = [];
-
     public function register(): void
     {
         $this->mergeConfigFrom(__DIR__.'/../config/observability.php', 'observability');
         $this->app->singleton(Reporter::class);
+        $this->app->singleton(SlowQueries::class);
         // One instance per request: terminate() must see the start time handle() set.
         $this->app->scoped(RequestMetrics::class);
         $this->configureConnection();
@@ -61,7 +56,8 @@ class ObservabilityServiceProvider extends ServiceProvider
             $kernel->prependMiddleware(RequestMetrics::class);
         }
 
-        $this->listenForSlowQueries();
+        // The event, not DB::listen: every connection, and no connection resolved at boot.
+        Event::listen(QueryExecuted::class, [SlowQueries::class, 'onQuery']);
     }
 
     /**
@@ -75,56 +71,19 @@ class ObservabilityServiceProvider extends ServiceProvider
         $base = config("database.connections.{$name}")
             ?? array_merge((array) config('database.connections.'.config('database.default')), ['database' => 'havuncore']);
 
-        if (($base['driver'] ?? null) === 'mysql' || ($base['driver'] ?? null) === 'mariadb') {
-            $base['options'] = ($base['options'] ?? []) + [
-                \PDO::ATTR_TIMEOUT => $timeout,
-                \PDO::MYSQL_ATTR_INIT_COMMAND => "SET SESSION innodb_lock_wait_timeout={$timeout}, lock_wait_timeout={$timeout}",
-            ];
+        // MySQL/MariaDB only (every Havun site). ATTR_TIMEOUT is the connect timeout; lock waits
+        // get their own. A slow server after connecting only delays the write, which happens
+        // after the response.
+        if (in_array($base['driver'] ?? null, ['mysql', 'mariadb'], true)) {
+            $options = (array) ($base['options'] ?? []);
+            $init = "SET SESSION innodb_lock_wait_timeout={$timeout}, lock_wait_timeout={$timeout}";
+            $options[\PDO::ATTR_TIMEOUT] = $timeout;
+            $options[\PDO::MYSQL_ATTR_INIT_COMMAND] = isset($options[\PDO::MYSQL_ATTR_INIT_COMMAND])
+                ? $options[\PDO::MYSQL_ATTR_INIT_COMMAND].'; '.$init
+                : $init;
+            $base['options'] = $options;
         }
 
         config(["database.connections.{$name}" => $base]);
-    }
-
-    private function listenForSlowQueries(): void
-    {
-        $threshold = (float) config('observability.slow_query_threshold_ms', 100);
-
-        DB::listen(function (QueryExecuted $query) use ($threshold): void {
-            if ($query->time < $threshold || HavunCore::writing()) {
-                return;
-            }
-            foreach (self::OWN_TABLES as $table) {
-                if (str_contains($query->sql, $table)) {
-                    return;
-                }
-            }
-
-            // A routed HTTP request writes after the response; a worker or command has no
-            // "after the response" (terminating never fires in a worker) and writes now.
-            $inRequest = $this->app->bound('request') && request()->route() !== null;
-
-            $row = [
-                'project' => (string) config('observability.project'),
-                // Template only: bindings carry e-mail addresses, names and tokens.
-                'query' => $query->sql,
-                'time_ms' => $query->time,
-                'connection' => $query->connectionName,
-                'request_path' => $inRequest ? SafePath::path(request()) : null,
-                'created_at' => now()->toDateTimeString(),
-            ];
-
-            if (! $inRequest) {
-                HavunCore::insert('slow_queries', [$row]);
-
-                return;
-            }
-            if ($this->slowQueries === []) {
-                $this->app->terminating(function (): void {
-                    HavunCore::insert('slow_queries', $this->slowQueries);
-                    $this->slowQueries = [];
-                });
-            }
-            $this->slowQueries[] = $row;
-        });
     }
 }

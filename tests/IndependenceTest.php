@@ -30,13 +30,13 @@ class IndependenceTest extends TestCase
         app(Reporter::class)->report(new RuntimeException('tweede'));
 
         $this->assertTrue(HavunCore::isOpen(), 'one failure opens the breaker');
-        $this->assertCount(2, file(storage_path('app/error-spool.jsonl'), FILE_SKIP_EMPTY_LINES));
+        $this->assertCount(2, file(HavunCore::statePath('error-spool.jsonl'), FILE_SKIP_EMPTY_LINES));
 
         $this->bringHavunCoreBack();
         $this->artisan('observability:flush-spool')->assertSuccessful();
 
         $this->assertSame(2, $this->havuncore('error_logs')->count());
-        $this->assertFileDoesNotExist(storage_path('app/error-spool.jsonl'));
+        $this->assertFileDoesNotExist(HavunCore::statePath('error-spool.jsonl'));
     }
 
     public function test_an_open_breaker_leaves_havuncore_alone_for_a_while(): void
@@ -54,7 +54,7 @@ class IndependenceTest extends TestCase
 
         $this->assertSame(0, $this->havuncore('error_logs')->count());
         $this->assertSame(0, $this->havuncore('request_metrics')->count());
-        $this->assertCount(2, file(storage_path('app/error-spool.jsonl'), FILE_SKIP_EMPTY_LINES));
+        $this->assertCount(2, file(HavunCore::statePath('error-spool.jsonl'), FILE_SKIP_EMPTY_LINES));
 
         $this->travel(61)->seconds();
         app(Reporter::class)->report(new RuntimeException('na de pauze'));

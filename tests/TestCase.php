@@ -32,7 +32,7 @@ abstract class TestCase extends Orchestra
     {
         parent::setUp();
         HavunCore::reset();
-        @unlink(storage_path('app/error-spool.jsonl'));
+        @unlink(HavunCore::statePath('error-spool.jsonl'));
 
         $schema = Schema::connection('havuncore');
         $schema->create('error_logs', function (Blueprint $t): void {

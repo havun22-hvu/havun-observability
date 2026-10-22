@@ -19,7 +19,8 @@ without personal data, and without the site ever waiting on HavunCore.
 composer require havun/observability   # repository: https://github.com/havun22-hvu/havun-observability
 ```
 
-`.env`: `OBSERVABILITY_PROJECT=<key in HavunCore>`; tests: `OBSERVABILITY_ENABLED=false`.
+`.env`: `OBSERVABILITY_PROJECT=<key in HavunCore>`; tests: `OBSERVABILITY_ENABLED=false`, and with
+`--parallel` a `state_path` per process (spool + breaker), e.g. `storage_path("app/obs-".ParallelTesting::token())`.
 The package registers itself: exception reporting, the log bridge, the metrics middleware, the
 slow-query listener and the spool command. Remove the site's own copies of those.
 

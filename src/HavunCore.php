@@ -93,8 +93,19 @@ final class HavunCore
         @touch(self::breakerFile(), self::$openedAt);
     }
 
+    /**
+     * Where the spool and the breaker live: config `state_path`, default storage/app. Parallel test
+     * processes each set their own, or one process's breaker silences the others.
+     */
+    public static function statePath(string $file): string
+    {
+        $dir = (string) (config('observability.state_path') ?: storage_path('app'));
+
+        return rtrim($dir, '/\\').DIRECTORY_SEPARATOR.$file;
+    }
+
     private static function breakerFile(): string
     {
-        return storage_path('framework/observability-breaker');
+        return HavunCore::statePath('observability-breaker');
     }
 }

@@ -17,7 +17,8 @@ class SlowQueries
     public function onQuery(QueryExecuted $query): void
     {
         try {
-            if ($query->time < (float) config('observability.slow_query_threshold_ms', 100) || HavunCore::writing()) {
+            if (! config('observability.enabled', true) || HavunCore::writing()
+                || $query->time < (float) config('observability.slow_query_threshold_ms', 100)) {
                 return;
             }
             foreach (self::OWN_TABLES as $table) {

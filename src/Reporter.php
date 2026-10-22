@@ -260,7 +260,7 @@ class Reporter
 
     private function spoolPath(): string
     {
-        return storage_path('app/error-spool.jsonl');
+        return HavunCore::statePath('error-spool.jsonl');
     }
 
     private function messageOf(Throwable $e): string

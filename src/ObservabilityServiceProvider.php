@@ -42,10 +42,7 @@ class ObservabilityServiceProvider extends ServiceProvider
             });
         }
 
-        if (! config('observability.enabled', true)) {
-            return;
-        }
-
+        // Always registered; `enabled` is read at runtime, so a test can switch it on after boot.
         $this->app->make(ExceptionHandler::class)->reportable(function (Throwable $e): void {
             $this->app->make(Reporter::class)->report($e);
         });

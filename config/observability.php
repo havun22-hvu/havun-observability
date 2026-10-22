@@ -18,6 +18,10 @@ return [
     // After a failed write HavunCore is left alone for this long; errors go to the spool.
     'breaker_seconds' => 60,
 
+    // Folder for the error spool and the breaker flag; null = storage/app. Parallel tests: one per
+    // process, e.g. storage_path('app/observability-'.ParallelTesting::token()).
+    'state_path' => null,
+
     // Route parameters whose value is a secret: replaced by {name} in every stored path.
     'secret_route_parameters' => ['token', 'code', 'qrCode'],
 

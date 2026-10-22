@@ -40,6 +40,15 @@ class ReviewFindingsTest extends TestCase
         $this->assertSame('download/{token}', $this->havuncore('request_metrics')->value('path'));
     }
 
+    public function test_a_short_secret_inside_a_slug_leaves_the_slug_alone(): void
+    {
+        Route::get('{club}/toegang/{code}', fn () => 'ok');
+
+        $this->get('judo-ab12-club/toegang/ab12');
+
+        $this->assertSame('judo-ab12-club/toegang/{code}', $this->havuncore('request_metrics')->value('path'));
+    }
+
     public function test_the_trace_carries_no_argument_values(): void
     {
         // As on a server where php.ini keeps arguments in traces.

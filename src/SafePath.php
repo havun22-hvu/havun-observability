@@ -33,9 +33,20 @@ final class SafePath
                 ));
             }
 
-            // Whole-value replacement also covers a secret that contains a slash.
+            // Per segment, so a short secret that also occurs inside a slug leaves the slug alone.
+            $segments = explode('/', $path);
+            foreach ($segments as $i => $segment) {
+                if (isset($secrets[$segment])) {
+                    $segments[$i] = '{'.$secrets[$segment].'}';
+                }
+            }
+            $path = implode('/', $segments);
+
+            // A secret that spans segments (a `.*` parameter) is replaced whole.
             foreach ($secrets as $value => $name) {
-                $path = str_replace($value, '{'.$name.'}', $path);
+                if (str_contains((string) $value, '/')) {
+                    $path = str_replace((string) $value, '{'.$name.'}', $path);
+                }
             }
 
             return $path;

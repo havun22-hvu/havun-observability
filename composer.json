@@ -1,0 +1,30 @@
+{
+    "name": "havun/observability",
+    "description": "Error, slow-query and request reporting from Havun sites to HavunCore — scrubbed of personal data, never blocking the site.",
+    "type": "library",
+    "license": "MIT",
+    "require": {
+        "php": "^8.2",
+        "illuminate/console": "^11.0|^12.0",
+        "illuminate/database": "^11.0|^12.0",
+        "illuminate/http": "^11.0|^12.0",
+        "illuminate/support": "^11.0|^12.0"
+    },
+    "require-dev": {
+        "orchestra/testbench": "^10.0",
+        "phpunit/phpunit": "^11.0"
+    },
+    "autoload": {
+        "psr-4": { "Havun\\Observability\\": "src/" }
+    },
+    "autoload-dev": {
+        "psr-4": { "Havun\\Observability\\Tests\\": "tests/" }
+    },
+    "extra": {
+        "laravel": {
+            "providers": ["Havun\\Observability\\ObservabilityServiceProvider"]
+        }
+    },
+    "config": { "sort-packages": true },
+    "minimum-stability": "stable"
+}

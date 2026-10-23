@@ -94,14 +94,35 @@ final class HavunCore
     }
 
     /**
-     * Where the spool and the breaker live: config `state_path`, default storage/app. Parallel test
-     * processes each set their own, or one process's breaker silences the others.
+     * Where the spool and the breaker live: config `state_path`, default storage/app/observability.
+     * Parallel test processes each set their own, or one process's breaker silences the others.
      */
     public static function statePath(string $file): string
     {
-        $dir = (string) (config('observability.state_path') ?: storage_path('app'));
+        $dir = config('observability.state_path') ?: self::defaultStateDir();
 
-        return rtrim($dir, '/\\').DIRECTORY_SEPARATOR.$file;
+        return rtrim((string) $dir, '/\\').DIRECTORY_SEPARATOR.$file;
+    }
+
+    /**
+     * A folder that git-ignores itself: a site whose storage/app is not ignored showed the breaker
+     * flag as a dirty checkout (JudoToernooi, 23-10-2026). A spool left in storage/app by 1.0.x
+     * moves along, so no pending error is lost.
+     */
+    private static function defaultStateDir(): string
+    {
+        $dir = storage_path('app/observability');
+        if (! is_file($dir.'/.gitignore')) {
+            @mkdir($dir, 0775, true);
+            @file_put_contents($dir.'/.gitignore', "*\n");
+            $oud = storage_path('app/error-spool.jsonl');
+            if (is_file($oud) && ! is_file($dir.'/error-spool.jsonl')) {
+                @rename($oud, $dir.'/error-spool.jsonl');
+            }
+            @unlink(storage_path('app/observability-breaker'));
+        }
+
+        return $dir;
     }
 
     private static function breakerFile(): string

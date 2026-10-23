@@ -7,7 +7,7 @@ without personal data, and without the site ever waiting on HavunCore.
 
 - **The site never waits on HavunCore.** Request metrics and slow queries are written after the
   response. Every write has a 2 s connect/lock timeout. One failure opens a breaker: HavunCore is
-  left alone for 60 s and errors go to `storage/app/error-spool.jsonl`, sent on by
+  left alone for 60 s and errors go to `storage/app/observability/error-spool.jsonl` (a folder that git-ignores itself), sent on by
   `observability:flush-spool` (scheduled every 5 min).
 - **Nothing personal leaves the site:** no IP, no query string, no secret route parameter
   (`{token}`, `{code}`, `{qrCode}`), no query bindings, e-mail addresses masked. Log context is

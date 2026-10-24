@@ -37,7 +37,7 @@ abstract class TestCase extends Orchestra
         $schema = Schema::connection('havuncore');
         $schema->create('error_logs', function (Blueprint $t): void {
             $t->id();
-            foreach (['project', 'exception_class', 'file', 'severity', 'url', 'method', 'ip_address', 'fingerprint'] as $c) {
+            foreach (['project', 'exception_class', 'file', 'severity', 'url', 'method', 'ip_address', 'fingerprint', 'request_id'] as $c) {
                 $t->string($c)->nullable();
             }
             $t->text('message')->nullable();

@@ -4,6 +4,7 @@ namespace Havun\Observability;
 
 use Illuminate\Database\QueryException;
 use Illuminate\Log\Events\MessageLogged;
+use Illuminate\Support\Facades\Context;
 use Symfony\Component\HttpKernel\Exception\HttpExceptionInterface;
 use Throwable;
 use WeakMap;
@@ -146,6 +147,7 @@ class Reporter
             'url' => SafePath::url($request),
             'method' => $request?->method(),
             'ip_address' => null,
+            'request_id' => Context::get('request_id'),
             'fingerprint' => hash('sha256', $row['exception_class'].($row['file'] ?? '').($row['line'] ?? '')),
             // Strings, so a spooled row inserts the same way later.
             'last_occurred_at' => now()->toDateTimeString(),

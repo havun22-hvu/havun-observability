@@ -3,6 +3,7 @@
 namespace Havun\Observability;
 
 use Havun\Observability\Console\FlushSpool;
+use Havun\Observability\Http\RequestId;
 use Havun\Observability\Http\RequestMetrics;
 use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Contracts\Debug\ExceptionHandler;
@@ -51,6 +52,8 @@ class ObservabilityServiceProvider extends ServiceProvider
         $kernel = $this->app->make(HttpKernel::class);
         if (method_exists($kernel, 'prependMiddleware')) {
             $kernel->prependMiddleware(RequestMetrics::class);
+            // Prepended last, so it runs first: every later middleware and error sees the ID.
+            $kernel->prependMiddleware(RequestId::class);
         }
 
         // The event, not DB::listen: every connection, and no connection resolved at boot.

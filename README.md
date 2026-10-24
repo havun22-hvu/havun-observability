@@ -28,5 +28,11 @@ A site's own kinds (self-report, business alert, browser error) go through
 `app(Havun\Observability\Reporter::class)->record([...])`. The error page shows
 `Reporter::lastReference()` — the first 8 characters of the fingerprint.
 
+**Request ID (v1.1.0):** every request gets one ID — nginx `$request_id` via the
+`X-Request-Id` header (32 hex; anything else is replaced), or generated without nginx. It sits in
+Laravel `Context` (every log line, every queued job), in the response header `X-Request-Id` and in
+`error_logs.request_id`. A site links its own records to it with `Context::get('request_id')`.
+Off: `OBSERVABILITY_REQUEST_ID=false`. Needs HavunCore with the `error_logs.request_id` column.
+
 Config defaults: `config/observability.php` (`vendor:publish --tag=observability-config`).
 HavunCore side: `HavunCore/docs/kb/reference/foutmeldingen.md`.

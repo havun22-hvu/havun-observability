@@ -26,6 +26,10 @@ return [
     // Route parameters whose value is a secret: replaced by {name} in every stored path.
     'secret_route_parameters' => ['token', 'code', 'qrCode'],
 
+    // One ID per request (nginx $request_id or generated) in Context, the response header and
+    // every error row: links an error to what the customer did in that request.
+    'request_id' => env('OBSERVABILITY_REQUEST_ID', true),
+
     'slow_query_threshold_ms' => env('SLOW_QUERY_THRESHOLD_MS', 100),
     'sampling_rate' => env('OBSERVABILITY_SAMPLING_RATE', 1.0),
     'excluded_paths' => ['up', 'health'],
